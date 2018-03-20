@@ -12,5 +12,8 @@
  */
 
 return [
-    // ...
+    'db' => [
+        'driver' => 'Pdo',
+        'dsn' => 'pgsql:dbname=' . getenv('db_name') . ';host=' . getenv('db_host')
+    ]
 ];
