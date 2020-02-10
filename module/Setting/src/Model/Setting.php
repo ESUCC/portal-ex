@@ -3,37 +3,30 @@
 namespace Setting\Model;
 
 use DomainException;
-
-use Traits\Models\HasSlug;
-use Traits\Models\HasGuarded;
+use Model\Concerns\QueryBuilder;
+use Model\Concerns\QuickModelBoot as Boot;
+use Model\Contracts\Bootable;
+use Model\Model;
+use Setting\InputFilter\DataFilter;
+use Traits\Interfaces\HasSlug as HasSlugInterface;
 use Traits\Models\ExchangeArray;
-
-use Setting\InputFilter\NameFilter;
-
-use Zend\Filter\StringTrim;
-use Zend\Filter\StripTags;
-use Zend\Filter\ToInt;
-use Zend\InputFilter\FileInput;
+use Traits\Models\HasGuarded;
+use Traits\Models\HasSlug;
 use Zend\InputFilter\InputFilter;
-use Zend\InputFilter\InputFilterAwareInterface;
 use Zend\InputFilter\InputFilterInterface;
-use Zend\Validator\StringLength;
 
-class Setting
+class Setting extends Model implements HasSlugInterface, Bootable
 {
-    use HasSlug, HasGuarded, ExchangeArray;
-    /**
-     * Int for Setting's id found in the db.
-     */
-    public $id;
-    /**
-     * String for Setting's name.
-     */
-    public $name;
-    /**
-     * String for Setting's description.
-     */
-    public $description;
+    use Boot, HasSlug, HasGuarded, ExchangeArray, QueryBuilder;
+
+    public static $primaryKey = 'slug';
+    protected static $table = 'settings';
+    public static $form = [
+        'data' => [
+            'type'     => 'json',
+            'required' => true,
+        ],
+    ];
 
     /**
      * InputFilter for Setting's inputFilter.
@@ -49,33 +42,32 @@ class Setting
     ];
 
     /**
-     * Get tab values as array
+     * Get tab values as array.
      *
      * @return array
      */
     public function getArrayCopy()
     {
         return [
-            'id' => $this->id,
             'slug' => $this->slug,
-            'name' => $this->name,
-            'description' => $this->description,
+            'data' => $this->data,
         ];
     }
 
     /**
-     * Gets Setting's input filter
+     * Gets Setting's input filter.
      *
      * Returns the tab's inputFilter.
      * Creates the inputFilter if it does not exist.
      *
-     * @param Array $options
+     * @param array $options
+     *
      * @return Setting $this
      */
     public function getInputFilter($options = [])
     {
         $tmpFilter = (new InputFilter())
-            ->merge(new NameFilter());
+            ->merge(new DataFilter());
 
         $this->inputFilter = $tmpFilter;
 
@@ -83,13 +75,14 @@ class Setting
     }
 
     /**
-     * Sets Setting's inputFilter
+     * Sets Setting's inputFilter.
      *
      * Throws error. Setting's inputFilter cannot be modifed
      * by an outside enity.
      *
-     * @return Setting $this
      * @throws DomainException
+     *
+     * @return Setting $this
      */
     public function setInputFilter(InputFilterInterface $inputFilter)
     {

@@ -3,37 +3,56 @@
 namespace User\Model;
 
 use DomainException;
-
-use Traits\Models\HasSlug;
-use Traits\Models\HasGuarded;
+use Model\Concerns\HasCast;
+use Model\Concerns\QueryBuilder;
+use Model\Concerns\QuickModelBoot as Boot;
+use Model\Contracts\Bootable;
+use Model\Model;
+use SessionManager\Tables;
+use Traits\Interfaces\HasSlug as HasSlugInterface;
 use Traits\Models\ExchangeArray;
-
+use Traits\Models\HasGuarded;
+use Traits\Models\HasSlug;
 use User\InputFilter\NameFilter;
-
-use Zend\Filter\StringTrim;
-use Zend\Filter\StripTags;
-use Zend\Filter\ToInt;
-use Zend\InputFilter\FileInput;
 use Zend\InputFilter\InputFilter;
-use Zend\InputFilter\InputFilterAwareInterface;
 use Zend\InputFilter\InputFilterInterface;
-use Zend\Validator\StringLength;
 
-class User
+class User extends Model implements HasSlugInterface, Bootable
 {
-    use HasSlug, HasGuarded, ExchangeArray;
+    use Boot, HasCast, HasSlug, HasGuarded, ExchangeArray, QueryBuilder;
+
+    public static $primaryKey = 'slug';
+    protected static $table = 'users';
+    public static $form = [
+        'name' => [
+            'type'     => 'text',
+            'required' => true,
+        ],
+        'email' => [
+            'type'     => 'email',
+            'required' => true,
+        ],
+        'codist' => [
+            'type'     => 'text',
+            'label'    => 'County District Number',
+            'required' => false,
+        ],
+        'is_staff' => [
+            'type'     => 'boolean',
+            'label'    => 'Is a staff member?',
+            'required' => true,
+        ],
+    ];
+
     /**
-     * Int for User's id found in the db.
+     * User constructor.
+     *
+     * @param array $attributes
      */
-    public $id;
-    /**
-     * String for User's name.
-     */
-    public $name;
-    /**
-     * String for User's email.
-     */
-    public $email;
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+    }
 
     /**
      * InputFilter for User's inputFilter.
@@ -44,32 +63,96 @@ class User
      * Static variable containing values users cannot change.
      */
     protected static $guarded = [
-        'id',
         'slug',
+        'codist',
     ];
 
     /**
-     * Get app values as array
+     *   COUNTY CODE 2 DIGITS
+     * DISTRICT CODE 4 DIGITS
+     * BUILDING CODE 3 DIGITS.
+     *
+     *  EXAMPLE: 06-8473-729
+     *   COUNTY: 06
+     * DISTRICT: 8473
+     * BUILDING: 729
+     *
+     * note: hyphen's are assumed to be part of the codist.
+     */
+    public function building($options = []): string
+    {
+        arrayValueDefault('composite-key', $options, true);
+
+        if ($options['composite-key']) {
+            $out = $this->codist;
+        } else {
+            $out = explode('-', $this->codist)[2];
+        }
+
+        return $out;
+    }
+
+    public function county(): string
+    {
+        return explode('-', $this->codist)[0];
+    }
+
+    public function defaultTab()
+    {
+        $groupTable = (new Tables())->getTable('group');
+        if ($groupTable->exists($this->building())) {
+            $group = $groupTable->get($this->building());
+        } elseif ($groupTable->exists($this->district())) {
+            $group = $groupTable->get($this->district());
+        } else {
+            $group = $groupTable->get($this->county());
+        }
+
+        return $group->getTabs()[0];
+    }
+
+    public function district($options = []): string
+    {
+        arrayValueDefault('composite-key', $options, true);
+
+        $codist = explode('-', $this->attributes['codist']);
+
+        if ($options['composite-key']) {
+            $out = $codist[0].'-'.$codist[1];
+        } else {
+            $out = $codist[1];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Get app values as array.
      *
      * @return array
      */
     public function getArrayCopy()
     {
         return [
-            'id' => $this->id,
-            'slug' => $this->slug,
-            'name' => $this->name,
-            'email' => $this->email,
+            'slug'     => $this->slug,
+            'name'     => $this->name,
+            'email'    => $this->email,
+            'codist'   => $this->codist,
+            'is_staff' => $this->is_staff,
+            'county'   => $this->county(),
+            'district' => $this->district(),
+            'building' => $this->building(),
         ];
     }
 
     /**
-     * Gets User's input filter
+     * Gets User's input filter.
      *
      * Returns the app's inputFilter.
      * Creates the inputFilter if it does not exist.
      *
-     * @param Array $options
+     * @param array $options
+     *
      * @return User $this
      */
     public function getInputFilter($options = [])
@@ -83,13 +166,51 @@ class User
     }
 
     /**
-     * Sets User's inputFilter
+     *  Returns the relative path (string) to the user's group logo.
+     */
+    public function getLogoFilename()
+    {
+        $fn = '';
+        // look up the group based on the user's CDN
+        $tables = new Tables();
+        $groupsTable = $tables->getTable('group');
+        $group = $groupsTable->getGroup($this->district());
+
+        if ($group) {
+            $fn = $group->logoFilename;
+        }
+
+        return $fn;
+    }
+
+    /**
+     *  Returns the background brand/header color to use for this user in
+     *  6-digit hex format (example: #FF7700).
+     */
+    public function getThemeColor()
+    {
+        $color = '';
+        // look up the group based on the user's CDN
+        $tables = new Tables();
+        $groupsTable = $tables->getTable('group');
+        $group = $groupsTable->getGroup($this->district());
+
+        if ($group) {
+            $color = $group->themeColor;
+        }
+
+        return $color;
+    }
+
+    /**
+     * Sets User's inputFilter.
      *
      * Throws error. User's inputFilter cannot be modifed
      * by an outside enity.
      *
-     * @return User $this
      * @throws DomainException
+     *
+     * @return User $this
      */
     public function setInputFilter(InputFilterInterface $inputFilter)
     {

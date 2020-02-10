@@ -3,37 +3,39 @@
 namespace Group\Model;
 
 use DomainException;
-
-use Traits\Models\HasSlug;
-use Traits\Models\HasGuarded;
-use Traits\Models\ExchangeArray;
-
 use Group\InputFilter\NameFilter;
-
-use Zend\Filter\StringTrim;
-use Zend\Filter\StripTags;
-use Zend\Filter\ToInt;
-use Zend\InputFilter\FileInput;
+use Model\Concerns\HasCast;
+use Model\Concerns\QueryBuilder;
+use Model\Concerns\QuickModelBoot as Boot;
+use Model\Model;
+use SessionManager\Tables;
+use Traits\Interfaces\HasSlug as HasSlugInterface;
+use Traits\Models\ExchangeArray;
+use Traits\Models\HasSlug;
 use Zend\InputFilter\InputFilter;
-use Zend\InputFilter\InputFilterAwareInterface;
 use Zend\InputFilter\InputFilterInterface;
-use Zend\Validator\StringLength;
 
-class Group
+class Group extends Model implements HasSlugInterface
 {
-    use HasSlug, HasGuarded, ExchangeArray;
-    /**
-     * Int for Group's id found in the db.
-     */
-    public $id;
-    /**
-     * String for Group's name.
-     */
-    public $name;
-    /**
-     * String for Group's description.
-     */
-    public $description;
+    use Boot, HasCast, HasSlug, ExchangeArray, QueryBuilder;
+
+    public static $primaryKey = 'slug';
+    protected static $table = 'groups';
+    public static $form = [
+        'name' => [
+            'type'     => 'text',
+            'required' => true,
+        ],
+        'description' => [
+            'type'     => 'textarea',
+            'required' => false,
+        ],
+        'grouptype' => [
+            'type'     => 'grouptype',
+            'label'    => 'GroupType',
+            'required' => true,
+        ],
+    ];
 
     /**
      * InputFilter for Group's inputFilter.
@@ -44,32 +46,64 @@ class Group
      * Static variable containing values users cannot change.
      */
     protected static $guarded = [
-        'id',
         'slug',
     ];
 
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+    }
+
     /**
-     * Get group values as array
+     * Get associated tabs.
+     *
+     * @return array
+     */
+    public function getTabs()
+    {
+        return (new Tables())
+            ->getTable('ownerTabs')
+            ->getTabs($this->slug, [
+                'type' => 'group',
+            ]);
+    }
+
+    /**
+     * Boolean representation of if the group has at least one tab.
+     *
+     * @return bool
+     */
+    public function hasTab(): bool
+    {
+        return !empty($this->getTabs());
+    }
+
+    /**
+     * Get group values as array.
      *
      * @return array
      */
     public function getArrayCopy()
     {
         return [
-            'id' => $this->id,
-            'slug' => $this->slug,
-            'name' => $this->name,
-            'description' => $this->description,
+            'slug'            => $this->slug,
+            'name'            => $this->name,
+            'description'     => $this->description,
+            'grouptype'       => $this->grouptype,
+            'logoFilename'    => $this->logoFilename,
+            'themeColor'      => $this->themeColor,
+            'backgroundColor' => $this->backgroundColor,
         ];
     }
 
     /**
-     * Gets Group's input filter
+     * Gets Group's input filter.
      *
      * Returns the group's inputFilter.
      * Creates the inputFilter if it does not exist.
      *
-     * @param Array $options
+     * @param array $options
+     *
      * @return Group $this
      */
     public function getInputFilter($options = [])
@@ -83,13 +117,14 @@ class Group
     }
 
     /**
-     * Sets Group's inputFilter
+     * Sets Group's inputFilter.
      *
      * Throws error. Group's inputFilter cannot be modifed
      * by an outside enity.
      *
-     * @return Group $this
      * @throws DomainException
+     *
+     * @return Group $this
      */
     public function setInputFilter(InputFilterInterface $inputFilter)
     {

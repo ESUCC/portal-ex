@@ -3,37 +3,39 @@
 namespace IpAddress\Model;
 
 use DomainException;
-
-use Traits\Models\HasSlug;
-use Traits\Models\HasGuarded;
-use Traits\Models\ExchangeArray;
-
 use IpAddress\InputFilter\NameFilter;
-
-use Zend\Filter\StringTrim;
-use Zend\Filter\StripTags;
-use Zend\Filter\ToInt;
-use Zend\InputFilter\FileInput;
+use Model\Concerns\QueryBuilder;
+use Model\Concerns\QuickModelBoot as Boot;
+use Model\Contracts\Bootable;
+use Model\Model;
+use Traits\Interfaces\HasSlug as HasSlugInterface;
+use Traits\Models\ExchangeArray;
+use Traits\Models\HasGuarded;
+use Traits\Models\HasSlug;
 use Zend\InputFilter\InputFilter;
-use Zend\InputFilter\InputFilterAwareInterface;
 use Zend\InputFilter\InputFilterInterface;
-use Zend\Validator\StringLength;
 
-class IpAddress
+class IpAddress extends Model implements HasSlugInterface, Bootable
 {
-    use HasSlug, HasGuarded, ExchangeArray;
-    /**
-     * Int for IpAddress's id found in the db.
-     */
-    public $id;
-    /**
-     * String for IpAddress's name.
-     */
-    public $name;
-    /**
-     * String for IpAddress's description.
-     */
-    public $description;
+    use Boot, HasSlug, HasGuarded, ExchangeArray, QueryBuilder;
+
+    public static $primaryKey = 'slug';
+    protected static $table = 'ipAddresses';
+    public static $form = [
+        'name' => [
+            'type'     => 'text',
+            'required' => false,
+        ],
+        'description' => [
+            'type'     => 'textarea',
+            'required' => false,
+        ],
+        'ip' => [
+            'type'     => 'ip',
+            'label'    => 'IP Address',
+            'required' => true,
+        ],
+    ];
 
     /**
      * InputFilter for IpAddress's inputFilter.
@@ -49,27 +51,28 @@ class IpAddress
     ];
 
     /**
-     * Get ipAddress values as array
+     * Get ipAddress values as array.
      *
      * @return array
      */
     public function getArrayCopy()
     {
         return [
-            'id' => $this->id,
-            'slug' => $this->slug,
-            'name' => $this->name,
+            'slug'        => $this->slug,
+            'name'        => $this->name,
             'description' => $this->description,
+            'ip'          => $this->ip,
         ];
     }
 
     /**
-     * Gets IpAddress's input filter
+     * Gets IpAddress's input filter.
      *
      * Returns the app's inputFilter.
      * Creates the inputFilter if it does not exist.
      *
-     * @param Array $options
+     * @param array $options
+     *
      * @return IpAddress $this
      */
     public function getInputFilter($options = [])
@@ -83,13 +86,14 @@ class IpAddress
     }
 
     /**
-     * Sets IpAddress's inputFilter
+     * Sets IpAddress's inputFilter.
      *
      * Throws error. IpAddress's inputFilter cannot be modifed
      * by an outside enity.
      *
-     * @return IpAddress $this
      * @throws DomainException
+     *
+     * @return IpAddress $this
      */
     public function setInputFilter(InputFilterInterface $inputFilter)
     {

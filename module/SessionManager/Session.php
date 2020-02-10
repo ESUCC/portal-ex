@@ -2,66 +2,242 @@
 
 namespace SessionManager;
 
+use User\Model\User;
+
 class Session
 {
+    /* Custom session variables used.
+     *
+     *  activeTime:
+     *      The time at which a session became active
+     *
+     *  userSlug:
+     *      The slug of the active user
+     */
+
+    /**
+     * @param array $options
+     *
+     * @return bool
+     */
     public static function start($options = [])
     {
-        return session_start($options);
+        arrayValueDefault('session_options', $options, []);
+        arrayValueDefault('start_active_time', $options, true);
+
+        if (session_status() == PHP_SESSION_NONE) {
+            $session = session_start($options['session_options']);
+
+            // note("session has started");
+
+            if ($options['start_active_time'] == true ||
+                $options['start_active_time'] == 1) {
+                // note("start_active_time");
+                self::setActiveTime();
+            }
+
+            return $session;
+        }
+
+        /* session is already started
+         * return true since the purpose
+         * of the function is have a
+         * session running
+         */
+        return true;
     }
 
+    /**
+     * @return bool
+     */
     public static function destroy()
     {
         return session_destroy();
     }
 
+    /**
+     * @return bool
+     */
     public static function end()
     {
         return self::destroy();
     }
 
-    public static function set($name, $value = NULL)
+    /**
+     * @param string|array $name
+     * @param mixed|null   $value
+     *
+     * @return mixed
+     */
+    public static function add($name, $value = null)
     {
-        if (!isset($value))
-        {
+        return self::set($name, $value);
+    }
+
+    /**
+     * @param string|array $name
+     * @param mixed|null   $value
+     *
+     * @return mixed
+     */
+    public static function set($name, $value = null)
+    {
+        if (!isset($value)) {
             $value = $name[1];
             $name = $name[0];
         }
 
-        $_SESSION[$name] = $value;
+        return $_SESSION[$name] = $value;
     }
 
-    public static function add($name, $value = NULL)
+    /**
+     * @return void
+     */
+    public static function setActiveTime()
     {
-        self::set($name, $value);
+        self::set('activeTime', time());
     }
 
+    /**
+     * @param \User\Model\User|string $user
+     *
+     * @return mixed
+     */
+    public static function setUser($user)
+    {
+        if ($user instanceof User) {
+            $slug = $user->slug;
+        } else {
+            $slug = $user;
+        }
+
+        return self::set('userSlug', $slug);
+    }
+
+    /**
+     * @param string $name
+     */
+    public static function remove($name)
+    {
+        $_SESSION[$name] = null;
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return mixed
+     */
     public static function get($name)
     {
         return $_SESSION[$name];
     }
 
+    /**
+     * @return \User\Model\User|bool
+     */
+    public static function getUser()
+    {
+        if (!self::isSet('userSlug')) {
+            return false;
+        }
+
+        $table = (new Tables())->getTable('user');
+
+        return $table->getUser(self::get('userSlug'));
+    }
+
+    /**
+     * @return string
+     */
+    public static function getId()
+    {
+        return session_id();
+    }
+
+    /**
+     * @param string $name
+     *
+     * @return bool
+     */
     public static function isSet($name)
     {
         return isset($_SESSION[$name]);
     }
 
-    public static function active()
+    /**
+     * @return bool
+     */
+    public static function isActive()
     {
         self::start();
-
+        //self::start(['start_active_time' => false]);
         if (self::isSet('activeTime')
-            && self::isSet('userId'))
-        {
+            && self::isSet('userSlug')) {
+            // note('both are set');
             // activeTime must be within the hour.
-            if ((self::get('activeTime') > (time() - 3600))
-                && (self::get('userId') > 0))
-            {
+            if (self::get('activeTime') > (time() - 3600)) {
+                // note('active');
+                self::setActiveTime(); // update active time
                 return true;
             }
+        }
+        // note('not_active');
+        return false;
+    }
+
+    /**
+     * @param \Privilege\Model\Privilege|string $privilege
+     * @param \Group\Model\Group|string|null    $group
+     *
+     * @return bool
+     */
+    public static function hasPrivilege($privilege, $group = null)
+    {
+        $table = (new Tables())->getTable('userPrivileges');
+
+        return $table->hasPrivilege(self::get('userSlug'), $privilege, $group);
+    }
+
+    public static function hasTabAccess($tab)
+    {
+        $tables = new Tables();
+
+        // system admins can access every tab
+        if (self::hasPrivilege('sudo')) {
+            return true;
+        }
+
+        $table = $tables->getTable('ownerTabs');
+        $owner = $table->getOwner(getSlug($tab));
+        if (!$tab instanceof \Tab\Model\Tab) {
+            $tab = $tables->getTable('tab')->get($tab);
+        }
+
+        if (!$owner) {
+            // no record found for the tab slug provided
+            return false;
+        }
+
+        $user = self::getUser();
+
+        if (self::hasPrivilege('auth', $owner) && (($user->is_staff && $tab->staff_access)
+            || (!$user->is_staff && $tab->student_access))) {
+            // user is a member of the group which owns the tab
+            // user is either staff and tab has staff_access
+            // or user is a student and tab has student_access
+            return true;
         }
 
         return false;
     }
-}
 
-?>
+    /**
+     * @return array
+     */
+    public static function getGroups()
+    {
+        $table = (new Tables())->getTable('userPrivileges');
+
+        return $table->getGroups(self::get('userSlug'));
+    }
+}

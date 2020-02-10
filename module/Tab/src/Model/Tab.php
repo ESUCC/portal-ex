@@ -3,37 +3,46 @@
 namespace Tab\Model;
 
 use DomainException;
-
-use Traits\Models\HasSlug;
-use Traits\Models\HasGuarded;
-use Traits\Models\ExchangeArray;
-
+use Model\Concerns\HasCast;
+use Model\Concerns\QueryBuilder;
+use Model\Concerns\QuickModelBoot as Boot;
+use Model\Contracts\Bootable;
+use Model\Model;
+use SessionManager\Tables;
 use Tab\InputFilter\NameFilter;
-
-use Zend\Filter\StringTrim;
-use Zend\Filter\StripTags;
-use Zend\Filter\ToInt;
-use Zend\InputFilter\FileInput;
+use Traits\Interfaces\HasSlug as HasSlugInterface;
+use Traits\Models\ExchangeArray;
+use Traits\Models\HasGuarded;
+use Traits\Models\HasSlug;
 use Zend\InputFilter\InputFilter;
-use Zend\InputFilter\InputFilterAwareInterface;
 use Zend\InputFilter\InputFilterInterface;
-use Zend\Validator\StringLength;
 
-class Tab
+class Tab extends Model implements HasSlugInterface, Bootable
 {
-    use HasSlug, HasGuarded, ExchangeArray;
-    /**
-     * Int for Tab's id found in the db.
-     */
-    public $id;
-    /**
-     * String for Tab's name.
-     */
-    public $name;
-    /**
-     * String for Tab's description.
-     */
-    public $description;
+    use Boot, HasCast, HasSlug, HasGuarded, ExchangeArray, QueryBuilder;
+
+    public static $primaryKey = 'slug';
+    protected static $table = 'tabs';
+    public static $form = [
+        'name' => [
+            'type'     => 'text',
+            'required' => true,
+        ],
+        'description' => [
+            'type'     => 'textarea',
+            'required' => false,
+        ],
+        'staff_access' => [
+            'type'     => 'boolean',
+            'label'    => 'Do staff members have access?',
+            'required' => true,
+        ],
+        'student_access' => [
+            'type'     => 'boolean',
+            'label'    => 'Do students have access?',
+            'required' => true,
+        ],
+    ];
 
     /**
      * InputFilter for Tab's inputFilter.
@@ -44,32 +53,52 @@ class Tab
      * Static variable containing values users cannot change.
      */
     protected static $guarded = [
-        'id',
         'slug',
     ];
 
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+    }
+
+    public function getApps()
+    {
+        $tables = new Tables();
+
+        return $tables->getTable('tabApps')->getApps($this->slug, ['type' => 'tab']);
+    }
+
     /**
-     * Get tab values as array
+     * Get tab values as array.
      *
      * @return array
      */
     public function getArrayCopy()
     {
         return [
-            'id' => $this->id,
-            'slug' => $this->slug,
-            'name' => $this->name,
-            'description' => $this->description,
+            'slug'           => $this->slug,
+            'name'           => $this->name,
+            'description'    => $this->description,
+            'staff_access'   => $this->staff_access,
+            'student_access' => $this->student_access,
         ];
     }
 
+    public function getGroup()
+    {
+        return (new Tables())
+            ->getTable('owerTabs')
+            ->getGroup($this->slug);
+    }
+
     /**
-     * Gets Tab's input filter
+     * Gets Tab's input filter.
      *
      * Returns the tab's inputFilter.
      * Creates the inputFilter if it does not exist.
      *
-     * @param Array $options
+     * @param array $options
+     *
      * @return Tab $this
      */
     public function getInputFilter($options = [])
@@ -83,13 +112,14 @@ class Tab
     }
 
     /**
-     * Sets Tab's inputFilter
+     * Sets Tab's inputFilter.
      *
      * Throws error. Tab's inputFilter cannot be modifed
      * by an outside enity.
      *
-     * @return Tab $this
      * @throws DomainException
+     *
+     * @return Tab $this
      */
     public function setInputFilter(InputFilterInterface $inputFilter)
     {

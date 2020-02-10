@@ -12,7 +12,7 @@
     "minimum-stability" : "dev",
     "prefer-stable" : true,
     "require" : {
-        "php" : "^5.6 || ^7.0",
+        "php" : "^7.1",
         "zendframework/zend-component-installer" : "^1.0 || ^0.7 || ^1.0.0-dev@dev",
         "zendframework/zend-mvc" : "^3.0.1",
         "zfcampus/zf-development-mode" : "^3.0",
@@ -21,17 +21,22 @@
         "zendframework/zend-log" : "^2.9",
         "zendframework/zend-session" : "^2.7.1",
         "zendframework/zend-escaper": "^2.5",
-        "esucc/simplesamlphp" : "dev-develop",
-        "vlucas/phpdotenv" : "^2.4"
+        "vlucas/phpdotenv" : "^2.4",
+        "simplesamlphp/simplesamlphp": "^1.15",
+        "psy/psysh": "@stable",
+      "ext-json": "*"
     },
     "autoload" : {
         "psr-4" : {
             "App\\" : "module/App/src/",
             "Application\\" : "module/Application/src/",
             "Attribute\\" : "module/Attribute/src/",
+            "Configuration\\" : "module/Configuration/src/",
             "Group\\" : "module/Group/src/",
             "GroupType\\" : "module/GroupType/src/",
             "IpAddress\\" : "module/IpAddress/src/",
+            "Model\\" : "module/Model/",
+            "OwnerType\\" : "module/OwnerType/src/",
             "Privilege\\" : "module/Privilege/src/",
             "SessionManager\\" : "module/SessionManager/",
             "Setting\\" : "module/Setting/src/",
@@ -55,10 +60,6 @@
         "serve" : "php -S 0.0.0.0:8080 -t public/ public/index.php",
         "test" : "phpunit"
     },
-    "repositories" : [{
-        "type" : "git",
-        "url" : "https://github.com/ESUCC/simplesamlphp-1.git",
-        "name" : "simplesaml"
+    "require-dev": {
     }
-    ]
 }
